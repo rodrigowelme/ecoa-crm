@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StageType {
+  OPEN
+  WON
+  LOST
+}
+
+enum LostReason {
+  PRICE
+  COMPETITOR
+  NO_RESPONSE
+  OTHER
+}
+
+model Stage {
+  id    Int       @id @default(autoincrement())
+  name  String
+  color String
+  order Int       @unique
+  type  StageType
+  deals Deal[]
+
+  @@map("stages")
+}
+
+model Seller {
+  id    Int    @id @default(autoincrement())
+  name  String
+  deals Deal[]
+
+  @@map("sellers")
+}
+
+model Deal {
+  id                Int         @id @default(autoincrement())
+  title             String
+  valueCents        Int
+  contactName       String
+  expectedCloseDate DateTime    @db.Date
+  position          Int         @default(0)
+  closedAt          DateTime?   @db.Date
+  lostReason        LostReason?
+  sellerId          Int
+  stageId           Int
+  seller            Seller      @relation(fields: [sellerId], references: [id])
+  stage             Stage       @relation(fields: [stageId], references: [id])
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([stageId, position])
+  @@index([sellerId])
+  @@map("deals")
+}

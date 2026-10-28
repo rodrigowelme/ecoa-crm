@@ -1,18 +1,51 @@
-import { formatCurrency } from '@/lib/formatters';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+import { DealCardContent } from '@/components/kaban/DealCardContent';
 import type { Deal, Seller } from '@/types/crm';
 
-export function DealCard({ deal, seller }: { deal: Deal; seller?: Seller }): React.JSX.Element {
+export function DealCard({
+  deal,
+  seller,
+  onEdit,
+}: {
+  deal: Deal;
+  seller?: Seller;
+  onEdit: (deal: Deal) => void;
+}): React.JSX.Element {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: `deal-${deal.id}`,
+  });
+
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
-      <h3 className="text-sm font-semibold text-slate-800">{deal.title}</h3>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={`relative ${isDragging ? 'opacity-30' : ''}`}
+    >
+      <DealCardContent deal={deal} seller={seller} onEdit={onEdit} />
 
-      <p className="mt-3 text-lg font-bold text-slate-900">{formatCurrency(deal.valueCents)}</p>
-
-      <div className="mt-3 space-y-1 text-xs text-slate-500">
-        <p>Contato: {deal.contactName}</p>
-        <p>Responsável: {seller?.name ?? 'Não informado'}</p>
-        <p>Previsão: {deal.expectedCloseDate.split('-').reverse().join('/')}</p>
-      </div>
-    </article>
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`Arrastar ${deal.title}`}
+        className="absolute right-3 top-3 z-20 flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded-md bg-slate-100 text-slate-500 hover:bg-slate-200 active:cursor-grabbing"
+      >
+        ⠿
+      </button>
+    </div>
   );
 }
