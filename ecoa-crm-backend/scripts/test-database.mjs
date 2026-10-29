@@ -2,6 +2,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -47,6 +48,33 @@ try {
   assert.equal(await prisma.stage.count(), 6);
   assert.equal(await prisma.seller.count(), 3);
   assert.equal(await prisma.deal.count(), 15);
+  // Reproduz um banco legado: registros do seed, mas sequência ainda no ID 1.
+  const snapshot = await prisma.deal.findMany({ orderBy: { id: 'asc' } });
+  const repairClient = new pg.Client({ connectionString });
+  await repairClient.connect();
+  try {
+    await repairClient.query(
+      "SELECT setval(pg_get_serial_sequence('deals', 'id'), 1, false)",
+    );
+    await repairClient.query(
+      "SELECT setval(pg_get_serial_sequence('sellers', 'id'), 100, true)",
+    );
+    await repairClient.query(
+      readFileSync(
+        new URL(
+          '../prisma/migrations/20261029160000_repair_id_sequences/migration.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    );
+  } finally {
+    await repairClient.end();
+  }
+  assert.deepEqual(
+    await prisma.deal.findMany({ orderBy: { id: 'asc' } }),
+    snapshot,
+  );
   const service = new DealsService(
     prisma,
     new ConfigService({ CHAOS_FAIL_RATE: 0 }),
@@ -73,7 +101,10 @@ try {
   const seller = await prisma.seller.create({
     data: { name: 'Vendedor de teste' },
   });
-  assert.ok(seller.id > 3);
+  assert.ok(
+    seller.id > 100,
+    'A reparação não pode retroceder uma sequência adiantada',
+  );
   await assert.rejects(
     service.move(first.id, { stageId: 6, index: 0 }),
     /Informe o motivo/,

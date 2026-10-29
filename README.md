@@ -34,6 +34,9 @@ http://localhost:3000/docs. O Compose sobe o PostgreSQL; front e back rodam loca
 O seed só aceita banco vazio e recusa sobrescrever registros. Nas próximas execuções,
 use apenas `docker compose up -d --wait` e os dois comandos de desenvolvimento.
 Para aplicar migrations posteriores: `npm --prefix ecoa-crm-backend run db:migrate`.
+Esse comando também repara as sequências de IDs de bancos preenchidos com o seed
+antigo, preservando os registros existentes. Não é necessário apagar o banco nem
+executar o seed novamente para corrigir conflito de chave primária na criação.
 
 Se alterar usuário, senha, porta ou banco no `.env` da raiz, ajuste também a
 `DATABASE_URL` no `.env` do backend. O Compose usa essas variáveis na criação do
