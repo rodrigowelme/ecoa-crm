@@ -1,16 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { sellers, stages } from '@/data/mocks';
 import { dealSchema, type DealFormData } from '@/schemas/deal.schema';
 import type { Deal } from '@/types/crm';
 import { Controller, useForm } from 'react-hook-form';
+import type { StageListResponse } from '@/types/api/stage-response.type';
+import type { SellerListResponse } from '@/types/api/seller-response.type';
 
-export function DealForm({
-  deal,
-  onSubmit,
-}: {
-  deal?: Deal | null;
-  onSubmit: (data: DealFormData) => void;
-}): React.JSX.Element {
+interface DealFormProps {
+  deal: Deal | null;
+  stages: StageListResponse;
+  sellers: SellerListResponse;
+  onSubmit: (data: DealFormData) => void | Promise<void>;
+}
+
+export function DealForm({ deal, stages, sellers, onSubmit }: DealFormProps): React.JSX.Element {
   const {
     register,
     control,
@@ -22,8 +24,8 @@ export function DealForm({
       title: deal?.title ?? '',
       contactName: deal?.contactName ?? '',
       valueCents: deal?.valueCents ?? 0,
-      sellerId: deal?.sellerId ?? sellers[0].id,
-      stageId: deal?.stageId ?? stages[0].id,
+      sellerId: deal?.sellerId ?? sellers[0]?.id,
+      stageId: deal?.stageId ?? stages[0]?.id,
       expectedCloseDate: deal?.expectedCloseDate ?? '',
     },
   });
@@ -139,11 +141,13 @@ export function DealForm({
           {...register('stageId', { valueAsNumber: true })}
           className="w-full rounded-lg border border-slate-300 p-3"
         >
-          {stages.map((stage) => (
-            <option key={stage.id} value={stage.id}>
-              {stage.name}
-            </option>
-          ))}
+          {stages
+            .filter((stage) => stage.type === 'OPEN' || stage.id === deal?.stageId)
+            .map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}
+              </option>
+            ))}
         </select>
       </div>
 

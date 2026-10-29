@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KanbanBoard } from '@/components/kaban/KanbanBoard';
 import { DealForm } from '@/components/kaban/DealForm';
 import { LostReasonDialog } from '@/components/kaban/LostReasonDialog';
@@ -8,6 +8,7 @@ import { useDeals } from '@/hooks/use-deals';
 import { useDealMutations } from '@/hooks/use-deal-mutations';
 import type { Deal, LostReason } from '@/types/crm';
 import type { DealFormData } from '@/schemas/deal.schema';
+import { getApiErrorMessage } from '@/lib/api-error';
 
 type PendingMove = {
   dealId: number;
@@ -17,8 +18,10 @@ type PendingMove = {
 
 export default function App() {
   const { data: dealsResponse, isPending, isError, error } = useDeals();
-  const { data: stagesResponse, isPending: stagesPending } = useStages();
-  const { data: sellersResponse, isPending: sellersPending } = useSellers();
+  const stagesQuery = useStages();
+  const sellersQuery = useSellers();
+  const stagesResponse = stagesQuery.data;
+  const sellersResponse = sellersQuery.data;
 
   const deals = dealsResponse?.data ?? [];
   const stages = stagesResponse?.data ?? [];
@@ -31,6 +34,7 @@ export default function App() {
   const [formError, setFormError] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const isSaving = create.isPending || update.isPending;
+  const moveInProgress = useRef(false);
 
   function handleEditDeal(deal: Deal) {
     setSelectedDeal(deal);
@@ -55,8 +59,15 @@ export default function App() {
   async function handleSaveDeal(data: DealFormData): Promise<void> {
     const targetStage = stages.find((stage) => stage.id === data.stageId);
 
-    if (!targetStage || targetStage.type !== 'OPEN') {
-      setFormError('Selecione uma etapa aberta.');
+    if (!targetStage) {
+      setFormError('Selecione uma etapa válida.');
+      return;
+    }
+
+    const keepingStage = selectedDeal?.stageId === targetStage.id;
+
+    if (targetStage.type !== 'OPEN' && !keepingStage) {
+      setFormError('Para encerrar um negócio, mova o card no Kanban.');
       return;
     }
 
@@ -74,7 +85,7 @@ export default function App() {
 
       handleCloseForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Não foi possível salvar o negócio.');
+      setFormError(getApiErrorMessage(err, 'Não foi possível salvar o negócio.'));
     }
   }
 
@@ -84,6 +95,9 @@ export default function App() {
     index: number,
     lostReason?: LostReason,
   ): Promise<void> {
+    // Evita que o rollback de uma movimentação apague outra ainda em andamento.
+    if (moveInProgress.current) return;
+    moveInProgress.current = true;
     setMoveError(null);
 
     try {
@@ -94,11 +108,14 @@ export default function App() {
         lostReason,
       });
     } catch (err) {
-      setMoveError(err instanceof Error ? err.message : 'Não foi possível movimentar o negócio.');
+      setMoveError(getApiErrorMessage(err, 'Não foi possível movimentar o negócio.'));
+    } finally {
+      moveInProgress.current = false;
     }
   }
 
   function handleMoveDeal(dealId: number, stageId: number, index: number) {
+    if (moveInProgress.current) return;
     const targetStage = stages.find((stage) => stage.id === stageId);
 
     const movingDeal = deals.find((deal) => deal.id === dealId);
@@ -111,7 +128,10 @@ export default function App() {
       return;
     }
 
-    void applyMoveDeal(dealId, stageId, index, movingDeal.lostReason ?? undefined);
+    const lostReason =
+      targetStage.type === 'LOST' ? (movingDeal.lostReason ?? undefined) : undefined;
+
+    void applyMoveDeal(dealId, stageId, index, lostReason);
   }
 
   function handleConfirmLostReason(reason: LostReason) {
@@ -122,20 +142,28 @@ export default function App() {
     setPendingMove(null);
   }
 
-  if (isPending) {
+  if (isPending || stagesQuery.isPending || sellersQuery.isPending) {
     return (
       <main className="min-h-screen bg-slate-50 p-6">
-        <p>Carregando negócios...</p>
+        <p>Carregando negócios, etapas e vendedores...</p>
       </main>
     );
   }
 
-  if (isError) {
+  if (isError || stagesQuery.isError || sellersQuery.isError) {
     return (
       <main className="min-h-screen bg-slate-50 p-6">
         <p className="text-red-600" role="alert">
-          Erro ao carregar negócios: {error.message}
+          {getApiErrorMessage(error ?? stagesQuery.error ?? sellersQuery.error, 'Não foi possível carregar os dados do CRM.')}
         </p>
+      </main>
+    );
+  }
+
+  if (!stages.length || !sellers.length) {
+    return (
+      <main className="min-h-screen bg-slate-50 p-6">
+        <p role="alert">Nenhuma etapa ou vendedor disponível. Execute o seed do banco para iniciar o CRM.</p>
       </main>
     );
   }
@@ -171,7 +199,13 @@ export default function App() {
         </div>
       )}
 
-      <KanbanBoard deals={deals} onEdit={handleEditDeal} onMove={handleMoveDeal} />
+      <KanbanBoard
+        deals={deals}
+        stages={stages}
+        sellers={sellers}
+        onEdit={handleEditDeal}
+        onMove={handleMoveDeal}
+      />
 
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -189,6 +223,8 @@ export default function App() {
             <DealForm
               key={selectedDeal?.id ?? 'new'}
               deal={selectedDeal}
+              stages={stages}
+              sellers={sellers}
               onSubmit={handleSaveDeal}
             />
 

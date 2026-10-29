@@ -4,21 +4,26 @@ import type { DealFormData } from '@/schemas/deal.schema';
 import type { DealListResponse } from '@/types/api/deal-response.type';
 import { API_ENDPOINTS } from '@/constants/api.constants';
 import type { MoveDealPayload } from '@/types/api/move-deal.type';
+import { normalizeDealDates } from '@/lib/deal-dates';
 
 const findAll = async () => {
-  return await api.get<DealListResponse>(API_ENDPOINTS.DEALS.GET);
+  const response = await api.get<DealListResponse>(API_ENDPOINTS.DEALS.GET);
+  return { ...response, data: response.data.map(normalizeDealDates) };
 };
 
 const create = async (data: DealFormData) => {
-  return await api.post(API_ENDPOINTS.DEALS.CREATE, data);
+  const response = await api.post<Deal>(API_ENDPOINTS.DEALS.CREATE, data);
+  return { ...response, data: normalizeDealDates(response.data) };
 };
 
-const update = async (id: number, payload: Partial<DealFormData>): Promise<Deal> => {
-  return await api.patch(API_ENDPOINTS.DEALS.UPDATE(id), payload);
+const update = async (id: number, payload: Partial<DealFormData>) => {
+  const response = await api.patch<Deal>(API_ENDPOINTS.DEALS.UPDATE(id), payload);
+  return { ...response, data: normalizeDealDates(response.data) };
 };
 
 const move = async (id: number, payload: MoveDealPayload) => {
-  return await api.patch<Deal>(API_ENDPOINTS.DEALS.MOVE(id), payload);
+  const response = await api.patch<Deal>(API_ENDPOINTS.DEALS.MOVE(id), payload);
+  return { ...response, data: normalizeDealDates(response.data) };
 };
 
 export const dealsService = {
