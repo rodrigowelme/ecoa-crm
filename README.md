@@ -116,4 +116,7 @@ informados; o documento não atribui ferramentas ou verificações sem evidênci
 real passaram. Typecheck e lint passaram no front e no back; builds foram verificados.
 No navegador, foi conferida a edição de negócio perdido mantendo a etapa e a
 persistência de reordenação por teclado após recarregar, com restauração da ordem
-inicial. O teste visual de rollback com falha simulada ainda deve ser realizado.
+inicial. Também foram conferidos no navegador o rollback com
+`CHAOS_FAIL_RATE=1`, o toast de erro da API e o cancelamento do motivo da perda,
+com a etapa original preservada após recarregar. Essa conferência usou instâncias
+temporárias nas portas 3001/5174; a aplicação principal continua em 3000/5173.

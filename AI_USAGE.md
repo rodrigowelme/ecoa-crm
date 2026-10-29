@@ -2,10 +2,10 @@
 
 ## Ferramentas e modelos
 
-Codex neste chat para comparar o código com o enunciado, corrigir o front e o back,
+Codex (baseado em GPT-6, conforme a identificação desta sessão) neste chat para comparar o código com o enunciado, corrigir o front e o back,
 escrever testes e revisar a entrega. TypeScript, ESLint, oxlint, Vitest e Prisma
-foram usados para verificar resultados. O identificador exato do modelo e outras
-ferramentas anteriores a esta conversa não foram informados pelo candidato.
+foram usados para verificar resultados. A variante exata do modelo não foi
+confirmada. Não há informação sobre outras ferramentas anteriores a esta conversa.
 
 ## Como trabalhei
 
@@ -44,3 +44,8 @@ Correção e testes no commit `187da22`.
 Os comandos e resultados efetivamente executados são relatados ao final desta
 conversa. Testes de serviço/HTTP simulados não demonstram que o arraste real no
 navegador funciona. O tempo de trabalho informado pelo candidato é de 6 horas.
+
+Na validação final, o navegador foi usado para confirmar o rollback com
+`CHAOS_FAIL_RATE=1` e o aviso de erro do React Toastify, além do cancelamento da
+perda sem alterar a etapa após recarregar. As instâncias temporárias de teste não
+alteraram a configuração do frontend principal na porta 5173.

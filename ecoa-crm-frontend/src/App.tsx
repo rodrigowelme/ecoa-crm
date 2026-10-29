@@ -9,6 +9,7 @@ import { useDealMutations } from '@/hooks/use-deal-mutations';
 import type { Deal, LostReason } from '@/types/crm';
 import type { DealFormData } from '@/schemas/deal.schema';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { toast } from 'react-toastify';
 
 type PendingMove = {
   dealId: number;
@@ -31,20 +32,16 @@ export default function App() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [moveError, setMoveError] = useState<string | null>(null);
   const isSaving = create.isPending || update.isPending;
   const moveInProgress = useRef(false);
 
   function handleEditDeal(deal: Deal) {
     setSelectedDeal(deal);
-    setFormError(null);
     setIsFormOpen(true);
   }
 
   function handleNewDeal() {
     setSelectedDeal(null);
-    setFormError(null);
     setIsFormOpen(true);
   }
 
@@ -52,7 +49,6 @@ export default function App() {
     if (isSaving) return;
 
     setSelectedDeal(null);
-    setFormError(null);
     setIsFormOpen(false);
   }
 
@@ -60,18 +56,16 @@ export default function App() {
     const targetStage = stages.find((stage) => stage.id === data.stageId);
 
     if (!targetStage) {
-      setFormError('Selecione uma etapa válida.');
+      toast.warning('Selecione uma etapa válida.');
       return;
     }
 
     const keepingStage = selectedDeal?.stageId === targetStage.id;
 
     if (targetStage.type !== 'OPEN' && !keepingStage) {
-      setFormError('Para encerrar um negócio, mova o card no Kanban.');
+      toast.warning('Para encerrar um negócio, mova o card no Kanban.');
       return;
     }
-
-    setFormError(null);
 
     try {
       if (selectedDeal) {
@@ -84,8 +78,9 @@ export default function App() {
       }
 
       handleCloseForm();
+      toast.success(selectedDeal ? 'Negócio atualizado com sucesso.' : 'Negócio criado com sucesso.');
     } catch (err) {
-      setFormError(getApiErrorMessage(err, 'Não foi possível salvar o negócio.'));
+      toast.error(getApiErrorMessage(err, 'Não foi possível salvar o negócio.'));
     }
   }
 
@@ -98,7 +93,6 @@ export default function App() {
     // Evita que o rollback de uma movimentação apague outra ainda em andamento.
     if (moveInProgress.current) return;
     moveInProgress.current = true;
-    setMoveError(null);
 
     try {
       await move.mutateAsync({
@@ -108,7 +102,9 @@ export default function App() {
         lostReason,
       });
     } catch (err) {
-      setMoveError(getApiErrorMessage(err, 'Não foi possível movimentar o negócio.'));
+      toast.error(getApiErrorMessage(err, 'Não foi possível movimentar o negócio.'), {
+        toastId: 'move-deal-error',
+      });
     } finally {
       moveInProgress.current = false;
     }
@@ -186,19 +182,6 @@ export default function App() {
         </button>
       </header>
 
-      {moveError && (
-        <div
-          role="alert"
-          className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-        >
-          <span>{moveError}</span>
-
-          <button type="button" onClick={() => setMoveError(null)} aria-label="Fechar mensagem">
-            ✕
-          </button>
-        </div>
-      )}
-
       <KanbanBoard
         deals={deals}
         stages={stages}
@@ -230,11 +213,6 @@ export default function App() {
 
             {isSaving && <p className="px-6 pb-3 text-sm text-slate-500">Salvando negócio...</p>}
 
-            {formError && (
-              <p role="alert" className="px-6 pb-4 text-sm text-red-600">
-                {formError}
-              </p>
-            )}
           </div>
         </div>
       )}
