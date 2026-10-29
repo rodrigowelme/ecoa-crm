@@ -18,7 +18,8 @@ export class CreateDealDto {
     description: 'Título do negócio',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'O título é obrigatório' })
+  @Matches(/\S/, { message: 'O título não pode conter apenas espaços' })
   title: string;
 
   @ApiProperty({

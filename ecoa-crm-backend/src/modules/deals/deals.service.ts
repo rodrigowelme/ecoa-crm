@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -212,7 +213,7 @@ export class DealsService {
     }
 
     if (Math.random() < failRate) {
-      throw new ServiceUnavailableException('Falha simulada na movimentação.');
+      throw new InternalServerErrorException('Falha simulada na movimentação.');
     }
 
     // Repetimos a transação se houver conflito concorrente.

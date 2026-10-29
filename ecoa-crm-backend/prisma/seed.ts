@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma/client.js';
+import { PrismaClient } from '@prisma/client';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -225,6 +225,11 @@ async function main() {
         },
       });
     }
+
+    // IDs explícitos não avançam as sequências SERIAL do PostgreSQL.
+    await tx.$queryRaw`SELECT setval(pg_get_serial_sequence('stages', 'id'), (SELECT MAX(id) FROM stages))`;
+    await tx.$queryRaw`SELECT setval(pg_get_serial_sequence('sellers', 'id'), (SELECT MAX(id) FROM sellers))`;
+    await tx.$queryRaw`SELECT setval(pg_get_serial_sequence('deals', 'id'), (SELECT MAX(id) FROM deals))`;
   });
 
   console.log('Seed concluído com sucesso!');

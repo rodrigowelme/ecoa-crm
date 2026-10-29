@@ -7,6 +7,10 @@
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
+    "db:generate": "prisma generate --config prisma7.config.ts",
+    "db:migrate": "prisma migrate deploy --config prisma7.config.ts",
+    "db:seed": "prisma db seed --config prisma7.config.ts",
+    "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed",
     "build": "nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -16,6 +20,7 @@
     "start:prod": "node dist/main",
     "lint": "oxlint --type-aware src/ test/",
     "test": "vitest run",
+    "test:db": "npm run build && node scripts/test-database.mjs",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
