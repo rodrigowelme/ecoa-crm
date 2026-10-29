@@ -1,125 +1,155 @@
 # Ecoa CRM
 
-CRM em Kanban com React, TypeScript estrito, NestJS, Prisma e PostgreSQL.
-Seis etapas fixas, três vendedores e quinze negócios iniciais; criação e edição,
-movimentação otimista com rollback, motivo da perda e reabertura.
+CRM em formato Kanban desenvolvido para o **Desafio Técnico — Desenvolvedor(a) Pleno Full Stack** da Ecoa (empresa fictícia). O objetivo é acompanhar oportunidades comerciais, valores por etapa e motivos de perda, com regras protegidas no backend.
 
-## Executar localmente
+## Stack
 
-Requisitos: Node.js 22.12+ e Docker Compose. Comandos abaixo em PowerShell, a partir
-da raiz do repositório. As credenciais de exemplo são apenas de desenvolvimento.
+- **Frontend:** React, Vite, TypeScript (`strict`), Tailwind CSS, dnd-kit, React Hook Form, Zod, Axios e TanStack React Query.
+- **Backend:** Node.js, NestJS, TypeScript (`strict`), Prisma e Swagger/OpenAPI.
+- **Dados:** PostgreSQL via Docker Compose, migrations versionadas e seed.
+- **Testes:** testes de serviços, HTTP e funções do frontend (Jest/Vitest conforme os projetos).
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item .env.example ecoa-crm-backend/.env
-Copy-Item ecoa-crm-frontend/.env.example ecoa-crm-frontend/.env
-docker compose up -d --wait
-npm --prefix ecoa-crm-backend ci
-npm --prefix ecoa-crm-frontend ci
-npm --prefix ecoa-crm-backend run db:setup
+## Funcionalidades e regras
+
+- Seis etapas fixas, ordenadas: **Lead → Qualificado → Proposta → Negociação → Ganho / Perdido**, com tipos `OPEN`, `WON` e `LOST`.
+- Seed com **3 vendedores** (sem autenticação) e **15 negócios** de exemplo.
+- Criação e edição de negócios: título, valor, contato, responsável, previsão de fechamento e etapa; validação no servidor.
+- Kanban com quantidade e soma em reais no cabeçalho de cada coluna, arraste entre etapas e reordenação dentro da mesma etapa, inclusive para baixo.
+- Valores monetários armazenados em **centavos inteiros** (`valueCents`), evitando erros de ponto flutuante.
+- Previsão de fechamento tratada como **data civil**: a conversão de entrada/saída evita alteração do dia em função do fuso horário.
+- Entrada em `LOST` exige `lostReason` (`PRICE`, `COMPETITOR`, `NO_RESPONSE` ou `OTHER`), também validado na API. Cancelar o diálogo não confirma o movimento.
+- Entrada em `WON` ou `LOST` grava `closedAt`; retorno a `OPEN` limpa `closedAt` e `lostReason`.
+- Atualização otimista ao mover card, com restauração do estado anterior e mensagem em caso de falha.
+- `CHAOS_FAIL_RATE` permite simular respostas **HTTP 500** na movimentação para testar rollback.
+
+## Como executar localmente
+
+**Pré-requisitos:** Node.js 20+, npm e Docker Desktop/Engine com Docker Compose funcionando.
+
+Na raiz do repositório:
+
+```bash
+docker compose up -d
 ```
 
-Em dois terminais:
+### Backend
 
-```powershell
-npm --prefix ecoa-crm-backend run start:dev
+```bash
+cd ecoa-crm-backend
+npm install
 ```
 
-```powershell
-npm --prefix ecoa-crm-frontend run dev
+Crie `ecoa-crm-backend/.env` a partir do `.env.example` e ajuste a URL conforme as credenciais e a porta configuradas no `docker-compose.yml`. Exemplo **somente para desenvolvimento local**:
+
+```dotenv
+DATABASE_URL="postgresql://ecoa:ecoa_dev@localhost:5432/ecoa_crm?schema=public"
+CHAOS_FAIL_RATE=0
 ```
 
-Interface: http://localhost:5173. API: http://localhost:3000. Swagger:
-http://localhost:3000/docs. O Compose sobe o PostgreSQL; front e back rodam localmente.
-O seed só aceita banco vazio e recusa sobrescrever registros. Nas próximas execuções,
-use apenas `docker compose up -d --wait` e os dois comandos de desenvolvimento.
-Para aplicar migrations posteriores: `npm --prefix ecoa-crm-backend run db:migrate`.
-Esse comando também repara as sequências de IDs de bancos preenchidos com o seed
-antigo, preservando os registros existentes. Não é necessário apagar o banco nem
-executar o seed novamente para corrigir conflito de chave primária na criação.
+Prepare o banco e inicie a API:
 
-Se alterar usuário, senha, porta ou banco no `.env` da raiz, ajuste também a
-`DATABASE_URL` no `.env` do backend. O Compose usa essas variáveis na criação do
-banco; alterar o arquivo não troca a senha de um volume já inicializado.
-
-## Verificações
-
-```powershell
-npm --prefix ecoa-crm-backend test
-npm --prefix ecoa-crm-backend run test:e2e
-npm --prefix ecoa-crm-backend run test:db
-npm --prefix ecoa-crm-frontend test
-npm --prefix ecoa-crm-backend run build
-npm --prefix ecoa-crm-frontend run build
-npm --prefix ecoa-crm-backend run lint
-npm --prefix ecoa-crm-frontend run lint
+```bash
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+npm run start:dev
 ```
 
-`test:db` requer PostgreSQL e permissão de criar bancos: cria um banco temporário,
-aplica migrations e seed, verifica criação após o seed, dinheiro, datas, ordem,
-fechamento, reabertura e CHAOS, e remove apenas esse banco ao terminar.
-Os dados do CRM não são usados nem alterados. As suítes Vitest usam substitutos do
-Prisma/serviço e não precisam do banco.
+O seed é necessário na configuração inicial, não em cada inicialização. A API fica, na configuração local utilizada, em `http://localhost:3000`, com Swagger em `http://localhost:3000/docs`.
 
-## Decisões
+### Frontend
 
-- Dinheiro é armazenado e somado em centavos inteiros. Ponto flutuante em reais
-  foi descartado para evitar divergências de arredondamento. O banco limita cada
-  valor ao intervalo de um inteiro PostgreSQL.
-- Previsão e fechamento usam `DATE`; o front preserva `YYYY-MM-DD` sem conversão
-  de fuso. Datas de criação/atualização são instantes distintos desses campos.
-- A ordem usa posições inteiras contíguas por coluna. Cada movimento remove o
-  negócio da origem, insere no índice final e regrava as posições em transação
-  serializável, com até três tentativas em conflito. Após mil inserções entre os
-  mesmos vizinhos, continuam existindo posições inteiras, sem perda de precisão.
-  Índices fracionários foram descartados para evitar rebalanceamento por precisão;
-  o custo de regravar a coluna é aceitável para este CRM pequeno.
-- O destino do arraste considera a metade superior/inferior do card para inserir
-  antes/depois. A posição enviada é o índice final, após remover o próprio card.
-- React Query aplica a mudança no cache, guarda o estado anterior e restaura em
-  falha. Uma movimentação por vez evita sobreposição de rollbacks; ao terminar,
-  a consulta é invalidada para sincronizar com o servidor.
-- Encerrar pelo formulário foi descartado: o Kanban centraliza essa interação e
-  pede o motivo ao entrar em Perdido. O formulário permite editar encerrados sem
-  mudar a etapa ou reabri-los. O backend aplica as regras também em chamadas diretas.
-- Sem login, conforme o escopo. Etapas e vendedores são preparados pelo seed.
+Abra outro terminal na raiz do repositório:
 
-## Teste manual de falha
+```bash
+cd ecoa-crm-frontend
+npm install
+```
 
-No `.env` do backend, use `CHAOS_FAIL_RATE=1` e reinicie a API. Um movimento deve
-aparecer imediatamente, retornar ao estado anterior e mostrar a mensagem da API
-após o HTTP 500. Use latência de rede no navegador para observar a atualização.
-Volte a variável para `0` para testar persistência após recarregar.
+Configure `VITE_API_URL=http://localhost:3000` em `ecoa-crm-frontend/.env` caso a aplicação exija essa variável, e execute:
 
-## Limitações e próximos passos
+```bash
+npm run dev
+```
 
-Não há testes automatizados de navegador para arraste real, cancelamento da perda,
-formulários, carregamento parcial e rollback visual. Conflitos concorrentes e
-retries da transação ainda precisam de testes específicos. Os testes HTTP usam o
-serviço simulado; a integração PostgreSQL testa o serviço real sem HTTP.
-Há seis testes de funções do frontend para destino do arraste por teclado/ponteiro,
-datas e mensagens da API, usando o executor nativo do Node.js.
-Em falha de rede depois do commit, a consulta posterior prevalece sobre o rollback
-local, pois a gravação pode ter ocorrido no servidor.
+Frontend: `http://localhost:5173` na configuração padrão do Vite.
 
-Ficaram de fora os diferenciais: filtros/busca, histórico de etapas, conflito 409,
-Dockerfiles da aplicação e CI. Com mais tempo, priorizaria testes de navegador e
-concorrência antes desses diferenciais.
+> **Importante:** confirme os scripts de seed/testes nos `package.json` e as variáveis nos `.env.example` da versão entregue. Os comandos acima refletem o fluxo de desenvolvimento registrado; não foi feita nesta conversa uma instalação limpa do checkout final.
+
+## API principal
+
+| Método | Rota | Objetivo |
+| --- | --- | --- |
+| GET | `/deals` | Listar negócios e suas posições |
+| POST | `/deals` | Criar negócio |
+| PATCH | `/deals/:id` | Editar negócio |
+| PATCH | `/deals/:id/move` | Mover/reordenar negócio |
+| GET | `/stages` | Consultar etapas fixas |
+| GET | `/sellers` | Consultar vendedores |
+
+Exemplo de movimento (índice baseado em zero):
+
+```json
+{ "stageId": 2, "index": 0 }
+```
+
+Para Perdido:
+
+```json
+{ "stageId": 6, "index": 0, "lostReason": "PRICE" }
+```
+
+## Como a ordem dos cards é persistida (R3)
+
+Cada negócio possui `stageId` e um **`position` inteiro** dentro da coluna. Ao mover, o backend remove o card da posição anterior, insere no índice de destino e **reindexa sequencialmente** os negócios das colunas afetadas em transação. A consulta retorna os cards ordenados por etapa e posição.
+
+**E se mover mil vezes entre os mesmos dois vizinhos?** Os índices continuam inteiros e sequenciais; não são calculadas médias ou posições fracionárias. Portanto, não há acúmulo de precisão nem necessidade de renormalizar números fracionários após muitos movimentos. O custo da escolha é atualizar várias linhas em cada reordenação, aceitável para o funil pequeno deste desafio. Movimentos concorrentes exigem transações e tratamento de conflitos.
+
+No frontend, a mutation de movimentação pode atualizar o cache do React Query antes da resposta; se a API falhar, o snapshot anterior é restaurado. Após confirmação, ocorre sincronização com o servidor. Para testar a falha, configure `CHAOS_FAIL_RATE=1`, reinicie a API e tente mover um card; depois retorne a `0`.
+
+## Testes e verificações
+
+Execute os testes nos diretórios de cada aplicação, usando os scripts definidos no respectivo `package.json`:
+
+```bash
+cd ecoa-crm-backend
+npm test
+```
+
+Em outro terminal:
+
+```bash
+cd ecoa-crm-frontend
+npm test
+```
+
+**Resultados registrados no histórico de revisão:** 24 testes de serviço, 15 testes HTTP e 6 testes de funções do frontend aprovados (**45 no total**). Em uma sessão anterior, foram também registrados testes de integração com PostgreSQL para migrations, seed, IDs, valores em centavos, datas, ordenação, fechamento, reabertura e falha simulada, além de verificações manuais no navegador.
+
+**O que não ficou coberto:** os testes HTTP empregam serviço simulado; não há suíte automatizada de navegador nem testes específicos abrangentes de concorrência/retries. A última rodada relatada não repetiu a integração PostgreSQL, os builds nem os testes manuais no navegador. Essas verificações devem ser refeitas no checkout final antes da entrega.
+
+## Decisões e alternativas
+
+| Decisão | Motivo / alternativa considerada |
+| --- | --- |
+| NestJS modular | Organização de controllers, serviços, validação e injeção de dependências em vez de uma API mínima sem estrutura. |
+| Prisma + PostgreSQL | Migrations, relacionamentos e transações explícitas. |
+| Centavos inteiros | Somatórios exatos em vez de reais como ponto flutuante. |
+| Data civil normalizada | Preservar o dia escolhido em diferentes fusos. |
+| `position` inteiro | Simplicidade para poucos cards; alternativa fracionária evitaria reindexações mas exigiria controle de precisão. |
+| React Query + Axios | Separar comunicação HTTP, estado do servidor e estado local da interface. |
+| dnd-kit | Controle do arraste, colisões e suporte ao teclado. |
+| Regras no backend | Impedir que a API seja contornada por requisições diretas. |
+
+## Limites e próximos passos
+
+O foco foi cumprir os itens obrigatórios antes dos diferenciais. Não foram priorizados autenticação, exclusão de negócios, busca/filtro avançados, histórico de mudanças de etapa, aviso de conflito entre duas abas (`409`), CI e empacotamento completo da aplicação em containers. A prioridade com mais tempo seria adicionar testes automatizados de ponta a ponta e de concorrência, além de validar a configuração a partir de um banco vazio e um clone limpo.
 
 ## Tempo e uso de IA
 
-Tempo informado pelo candidato: **6 horas**, acima da estimativa de 4 horas do
-enunciado. Uso de IA e exemplos reais desta conversa estão em [AI_USAGE.md](AI_USAGE.md).
-O modelo exato e eventuais ferramentas usadas antes desta conversa não foram
-informados; o documento não atribui ferramentas ou verificações sem evidência.
+**Tempo total de trabalho informado: 6 horas.** O enunciado dimensionava o exercício para até 4 horas; o tempo registrado ultrapassou essa estimativa. O uso específico de IA não foi cronometrado separadamente.
 
-## Validação realizada nesta revisão
+O processo de colaboração, os prompts reais, as correções e os limites das verificações estão documentados no [AI_USAGE.md](./AI_USAGE.md).
 
-39 testes Vitest no backend, seis testes no frontend e a integração com PostgreSQL
-real passaram. Typecheck e lint passaram no front e no back; builds foram verificados.
-No navegador, foi conferida a edição de negócio perdido mantendo a etapa e a
-persistência de reordenação por teclado após recarregar, com restauração da ordem
-inicial. Também foram conferidos no navegador o rollback com
-`CHAOS_FAIL_RATE=1`, o toast de erro da API e o cancelamento do motivo da perda,
-com a etapa original preservada após recarregar. Essa conferência usou instâncias
-temporárias nas portas 3001/5174; a aplicação principal continua em 3000/5173.
+## Entrega
+
+Repositório Git privado, com histórico incremental de commits, migrations versionadas, `README.md`, `AI_USAGE.md` e `.env.example`. Nenhuma credencial ou segredo real deve ser versionado. O acesso ao repositório deve ser concedido às pessoas indicadas pela equipe avaliadora.
